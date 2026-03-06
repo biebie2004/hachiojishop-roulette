@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>お店えらびルーレット（八王子・共有）</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background:#111; color:#eee; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; margin: 8px 0 12px; }
+    .card { background:#1b1b1b; border:1px solid #2a2a2a; border-radius: 14px; padding: 14px; margin: 10px 0; }
+    .row { display:flex; gap:10px; flex-wrap: wrap; }
+    .chip { border:1px solid #333; background:#141414; color:#eee; padding:10px 12px; border-radius:999px; cursor:pointer; user-select:none; }
+    .chip.on { background:#2a2a2a; border-color:#555; }
+    .btn { width:100%; padding:12px 14px; border-radius:12px; border:1px solid #333; background:#eee; color:#111; font-weight:700; cursor:pointer; }
+    .btn.sub { background:#1b1b1b; color:#eee; }
+    .result { font-size: 24px; font-weight: 800; margin-top: 10px; }
+    .muted { color:#aaa; font-size: 12px; line-height: 1.5; }
+    table { width:100%; border-collapse: collapse; }
+    td, th { border-bottom:1px solid #2a2a2a; padding:10px 6px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>お店えらびルーレット（八王子・共有）</h1>
+
+    <div class="card">
+      <div class="muted">地域：八王子（固定） / 店リストはHTML内に固定（どの端末でも同じ）</div>
+
+      <div class="muted" style="margin-top:12px">目的</div>
+      <div class="row" id="purpose"></div>
+
+      <div class="muted" style="margin-top:10px">主食</div>
+      <div class="row" id="staple"></div>
+
+      <div class="muted" style="margin-top:10px">辛さ</div>
+      <div class="row" id="spicy"></div>
+
+      <div class="muted" style="margin-top:10px">価格</div>
+      <div class="row" id="price"></div>
+
+      <div class="muted" style="margin-top:10px">滞在</div>
+      <div class="row" id="stay"></div>
+
+      <div class="muted" style="margin-top:10px">デザート</div>
+      <div class="row" id="dessert"></div>
+
+      <div class="muted" style="margin-top:10px">相手</div>
+      <div class="row" id="withWhom"></div>
+
+      <div class="muted" style="margin-top:10px">時間帯</div>
+      <div class="row" id="time"></div>
+
+      <button class="btn" id="spin" style="margin-top:14px;">抽選する</button>
+      <button class="btn sub" id="resetSel" style="margin-top:8px;">条件を全部解除</button>
+
+      <div class="result" id="result">—</div>
+      <div class="muted" id="why">—</div>
+    </div>
+
+    <div class="card">
+      <div class="muted">登録済みの店（コード内）</div>
+      <table id="list"></table>
+      <div class="muted" style="margin-top:8px;">
+        追加したい時は、このHTMLのSHOPSに追記して、公開ページを更新します。
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ここに店リストを書く（＝どの端末でも同じリストになる）
+  // 店側の値は「どっちでも / いつでも」を使える（該当なしを減らせる）
+  const SHOPS = [
+    { name:"松屋", purpose:"食事メイン", staple:"ごはん", spicy:"辛くない", price:"安い", stay:"食べたらすぐ帰る", dessert:"なくてもいい", withWhom:"どっちでも", time:"いつでも", memo:"回転早い" },
+    { name:"しゃぶ葉", purpose:"食事メイン", staple:"どっちでも", spicy:"どっちでも", price:"安い", stay:"長居できる", dessert:"デザートあり", withWhom:"どっちでも", time:"いつでも",
+    { name:"マショマショ", purpose:"飲みメイン", staple:"どっちでも", spicy:"どっちでも", price:"普通", stay:"長居できる", dessert:"なくてもいい", withWhom:"どっちでも", time:"夜", memo:"にぎやか" },
+{ name:"サイゼリア", purpose:"食事メイン", staple:"どっちでも", spicy:"どっちでも", price:"安い", stay:"長居できる", dessert:"デザートあり", withWhom:"友達", time:"どっちでも", memo:"メモ" },
+  ];
+
+
+    // 追加する時は、この形式の1行を増やすだけ：
+    // { name:"店名", purpose:"食事メイン", staple:"麺", spicy:"辛い", price:"高い", stay:"長居できる", dessert:"デザートあり", withWhom:"恋人", time:"夜", memo:"メモ" },
+  ];
+
+  const AREA_FIXED = "八王子"; // 表示用（データには持たせていない）
+
+  const groups = {
+    purpose: ["食事メイン","飲みメイン"],
+    staple: ["ごはん","麺"],
+    spicy: ["辛い","辛くない"],
+    price: ["安い","普通","高い"],
+    stay: ["長居できる","食べたらすぐ帰る"],
+    dessert: ["デザートあり","なくてもいい"],
+    withWhom: ["女友達","恋人"],
+    time: ["朝","昼","夜"]
+  };
+
+  const state = {
+    items: SHOPS.map(s => ({
+      name: String(s.name || "").trim(),
+      purpose: String(s.purpose || "どっちでも").trim(),
+      staple: String(s.staple || "どっちでも").trim(),
+      spicy: String(s.spicy || "どっちでも").trim(),
+      price: String(s.price || "普通").trim(),
+      stay: String(s.stay || "どっちでも").trim(),
+      dessert: String(s.dessert || "どっちでも").trim(),
+      withWhom: String(s.withWhom || "どっちでも").trim(),
+      time: String(s.time || "いつでも").trim(),
+      memo: String(s.memo || "").trim()
+    })),
+    selected: Object.fromEntries(Object.keys(groups).map(k => [k, new Set()]))
+  };
+
+  function renderChips(groupId){
+    const el = document.getElementById(groupId);
+    el.innerHTML = "";
+    groups[groupId].forEach(v => {
+      const b = document.createElement("div");
+      b.className = "chip";
+      b.textContent = v;
+      b.onclick = () => {
+        if(state.selected[groupId].has(v)) state.selected[groupId].delete(v);
+        else state.selected[groupId].add(v);
+        renderAllChips();
+      };
+      el.appendChild(b);
+    });
+  }
+
+  function renderAllChips(){
+    Object.keys(groups).forEach(g=>{
+      const el = document.getElementById(g);
+      [...el.children].forEach(ch=>{
+        const v = ch.textContent;
+        ch.classList.toggle("on", state.selected[g].has(v));
+      });
+    });
+  }
+
+  function matches(item){
+    for(const g of Object.keys(groups)){
+      const sel = state.selected[g];
+      if(sel.size === 0) continue;
+
+      if(item[g] === "どっちでも") continue;
+      if(g === "time" && item[g] === "いつでも") continue;
+
+      if(sel.has(item[g])) continue;
+      return false;
+    }
+    return true;
+  }
+
+  function pickRandom(arr){
+    if(arr.length === 0) return null;
+    const i = Math.floor(Math.random() * arr.length);
+    return arr[i];
+  }
+
+  function condText(){
+    const s = (g)=> state.selected[g].size ? [...state.selected[g]].join(" / ") : "未選択";
+    return `地域=${AREA_FIXED}、目的=${s("purpose")}、主食=${s("staple")}、辛さ=${s("spicy")}、価格=${s("price")}、滞在=${s("stay")}、デザート=${s("dessert")}、相手=${s("withWhom")}、時間帯=${s("time")}`;
+  }
+
+  function spin(){
+    const pool = state.items.filter(matches);
+    const res = pickRandom(pool);
+    const resultEl = document.getElementById("result");
+    const whyEl = document.getElementById("why");
+
+    if(!res){
+      resultEl.textContent = "該当なし";
+      whyEl.textContent = `条件：${condText()}。条件を減らすか、店データ側に「どっちでも/いつでも」を使うと当たりやすいです。`;
+      return;
+    }
+    resultEl.textContent = res.name;
+    const memo = res.memo ? ` / メモ：${res.memo}` : "";
+    whyEl.textContent = `一致：${condText()}（候補 ${pool.length} 件から抽選）${memo}`;
+  }
+
+  function renderList(){
+    const table = document.getElementById("list");
+    table.innerHTML =
+      `<tr><th>店名</th><th>目的</th><th>主食</th><th>辛さ</th><th>価格</th><th>滞在</th><th>デザ</th><th>相手</th><th>時間帯</th></tr>`;
+    state.items.forEach(it=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td>${it.name}</td><td>${it.purpose}</td><td>${it.staple}</td><td>${it.spicy}</td><td>${it.price}</td><td>${it.stay}</td><td>${it.dessert}</td><td>${it.withWhom}</td><td>${it.time}</td>`;
+      table.appendChild(tr);
+    });
+    if(state.items.length === 0){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="9" class="muted">まだ店がありません。SHOPSに追加してください。</td>`;
+      table.appendChild(tr);
+    }
+  }
+
+  function clearSelections(){
+    Object.keys(state.selected).forEach(k => state.selected[k].clear());
+    renderAllChips();
+    document.getElementById("result").textContent = "—";
+    document.getElementById("why").textContent = "—";
+  }
+
+  Object.keys(groups).forEach(renderChips);
+  renderAllChips();
+  renderList();
+
+  document.getElementById("spin").onclick = spin;
+  document.getElementById("resetSel").onclick = clearSelections;
+</script>
+</body>
+</html>
